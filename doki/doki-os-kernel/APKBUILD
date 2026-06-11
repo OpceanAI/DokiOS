@@ -1,4 +1,3 @@
-# Maintainer: Doki Team <team@doki.opceanai.com>
 pkgname=doki-os-kernel
 pkgver=7.0.12
 _kernver=${pkgver%.*}

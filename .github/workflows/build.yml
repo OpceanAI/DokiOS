@@ -1,0 +1,112 @@
+name: Build Dokios
+
+on:
+  push:
+    branches: [main, doki-os]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALPINE_VERSION: "3.24"
+
+jobs:
+  build-packages:
+    name: Build APK Packages (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    container:
+      image: alpine:${{ env.ALPINE_VERSION }}
+      options: --privileged
+    steps:
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache \
+            abuild build-base apk-tools alpine-conf git sudo fakeroot \
+            linux-headers bc bison flex elfutils-dev openssl-dev perl \
+            python3 bash
+
+      - name: Setup builder user
+        run: |
+          addgroup -S abuild
+          adduser -S -G abuild -h /home/builder -s /bin/sh builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+
+      - name: Restore signing key
+        if: github.event_name != 'pull_request'
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          mkdir -p /home/builder/.abuild
+          echo "$APK_SIGNING_KEY" | base64 -d > /home/builder/.abuild/ci.rsa
+          chmod 0600 /home/builder/.abuild/ci.rsa
+          chown builder:abuild /home/builder/.abuild/ci.rsa
+          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
+          echo 'PACKAGER="DokiOS CI <ci@doki.opceanai.com>"' >> /home/builder/.abuild/abuild.conf
+          echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
+          chown builder:abuild /home/builder/.abuild/abuild.conf
+
+      - name: Generate temporary key (PR builds)
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p /home/builder/.abuild
+          openssl genrsa -out /home/builder/.abuild/ci.rsa 2048 2>/dev/null
+          openssl rsa -in /home/builder/.abuild/ci.rsa -pubout \
+            -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
+          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
+          chown -R builder:abuild /home/builder/.abuild
+          cp /home/builder/.abuild/ci.rsa.pub /etc/apk/keys/
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /home/builder/.ccache
+          key: ccache-${{ matrix.arch }}-${{ hashFiles('doki/**/APKBUILD') }}
+          restore-keys: ccache-${{ matrix.arch }}-
+
+      - name: Build kernel package
+        run: |
+          cd doki/doki-os-kernel
+          su builder -c "abuild -F checksum"
+          su builder -c "abuild -F -r"
+
+      - name: Build Doki packages
+        run: |
+          for pkg in doki dokid doki-compose doki-init doki-kube doki-kubectl doki-os-base doki-os-vm; do
+            echo "==> Building $pkg"
+            cd doki/$pkg
+            su builder -c "abuild -F -r" || exit 1
+            cd ../..
+          done
+
+      - name: Create APK repository
+        run: |
+          REPO_DIR="repo/main/${{ matrix.arch }}"
+          mkdir -p "$REPO_DIR"
+          find /home/builder/packages -name '*.apk' -exec cp {} "$REPO_DIR/" \;
+          cd "$REPO_DIR"
+          apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || true
+          if [ -f /home/builder/.abuild/ci.rsa ]; then
+            abuild-sign -k /home/builder/.abuild/ci.rsa APKINDEX.tar.gz
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: repo/
+          retention-days: 14
