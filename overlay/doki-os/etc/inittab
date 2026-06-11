@@ -1,0 +1,5 @@
+::sysinit:/sbin/doki-init sysinit
+::respawn:/sbin/doki-init service
+tty1::respawn:/sbin/getty -L tty1 115200 vt100
+::shutdown:/sbin/doki-init shutdown
+::ctrlaltdel:/sbin/reboot

@@ -1,0 +1,27 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=dokid
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="The Universal Container Engine - Daemon"
+url="https://github.com/OpceanAI/Doki"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends="doki iproute2 nftables fuse-overlayfs"
+options="!check"
+source="https://github.com/OpceanAI/DokiOS/releases/download/v$pkgver/dokid-$pkgver-$CARCH.tar.gz
+	dokid.initd
+	dokid.confd"
+subpackages="$pkgname-openrc"
+
+package() {
+	install -Dm755 "$srcdir"/dokid "$pkgdir"/usr/bin/dokid
+	install -Dm644 "$srcdir"/dokid.confd "$pkgdir"/etc/conf.d/dokid
+}
+
+openrc() {
+	default_openrc
+	install -Dm755 "$srcdir"/dokid.initd "$subpkgdir"/etc/init.d/dokid
+}
+
+sha512sums="
+"

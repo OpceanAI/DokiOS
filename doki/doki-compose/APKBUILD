@@ -1,0 +1,18 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=doki-compose
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="Docker Compose compatible engine for Doki"
+url="https://github.com/OpceanAI/Doki"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends="doki"
+options="!check"
+source="https://github.com/OpceanAI/DokiOS/releases/download/v$pkgver/doki-compose-$pkgver-$CARCH.tar.gz"
+
+package() {
+	install -Dm755 "$srcdir"/doki-compose "$pkgdir"/usr/bin/doki-compose
+}
+
+sha512sums="
+"

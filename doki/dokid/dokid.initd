@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+
+name="Doki Daemon"
+description="Doki Container Engine Daemon"
+command="/usr/bin/dokid"
+command_args="-socket /var/run/doki.sock -log-level ${LOG_LEVEL:-info}"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+start_stop_daemon_args="--quiet --chdir /var/lib/doki"
+required_dirs="/var/lib/doki"
+
+depend() {
+	need sysfs cgroups
+	use net
+	after firewall
+	provide container-engine
+}
+
+start_pre() {
+	checkpath -d -m 0755 /var/lib/doki
+	checkpath -d -m 0755 /var/run
+}

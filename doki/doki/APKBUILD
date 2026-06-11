@@ -1,0 +1,18 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=doki
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="The Universal Container Engine - CLI"
+url="https://github.com/OpceanAI/Doki"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends=""
+options="!check"
+source="https://github.com/OpceanAI/DokiOS/releases/download/v$pkgver/doki-$pkgver-$CARCH.tar.gz"
+
+package() {
+	install -Dm755 "$srcdir"/doki "$pkgdir"/usr/bin/doki
+}
+
+sha512sums="
+"

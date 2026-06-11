@@ -1,0 +1,18 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=doki-kube
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="Kubernetes components for Doki (apiserver, kubelet, scheduler, controllers, proxy, dns)"
+url="https://github.com/OpceanAI/Doki"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends="doki"
+options="!check"
+source="https://github.com/OpceanAI/DokiOS/releases/download/v$pkgver/doki-kube-$pkgver-$CARCH.tar.gz"
+
+package() {
+	install -Dm755 "$srcdir"/doki-kube "$pkgdir"/usr/bin/doki-kube
+}
+
+sha512sums="
+"

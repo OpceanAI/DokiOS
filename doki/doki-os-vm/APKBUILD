@@ -1,0 +1,24 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=doki-os-vm
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="doki-OS VM metapackage (kernel + base + WiFi firmware)"
+url="https://github.com/OpceanAI/DokiOS"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends="
+	doki-os-base~$pkgver
+	doki-os-kernel~$pkgver
+	linux-firmware-iwlwifi
+	linux-firmware-ath9k_htc
+	linux-firmware-rtl_usb
+	linux-firmware-mediatek
+	linux-firmware-brcm
+	"
+
+package() {
+	mkdir -p "$pkgdir"
+}
+
+sha512sums="
+"

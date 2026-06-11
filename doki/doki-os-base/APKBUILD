@@ -1,0 +1,31 @@
+# Maintainer: Doki Team <team@doki.opceanai.com>
+pkgname=doki-os-base
+pkgver=0.9.5
+pkgrel=0
+pkgdesc="doki-OS base metapackage"
+url="https://github.com/OpceanAI/DokiOS"
+arch="x86_64 aarch64 armv7"
+license="GPL-3.0-only"
+depends="
+	doki~$pkgver
+	dokid~$pkgver
+	dokid-openrc~$pkgver
+	doki-compose~$pkgver
+	doki-init~$pkgver
+	doki-kube~$pkgver
+	doki-kubectl~$pkgver
+	iproute2
+	nftables
+	fuse-overlayfs
+	ca-certificates-bundle
+	tini
+	wireless-tools
+	wpa_supplicant
+	"
+
+package() {
+	mkdir -p "$pkgdir"
+}
+
+sha512sums="
+"

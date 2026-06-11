@@ -1,0 +1,4 @@
+# Doki daemon configuration
+#LOG_LEVEL="info"
+#STORAGE_DRIVER="overlay2"
+#DNS_LISTEN="127.0.0.11:53"
