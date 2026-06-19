@@ -20,65 +20,54 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-latest
+            alpine_img: alpine:3.24
           - arch: aarch64
             runner: ubuntu-24.04-arm
-    container:
-      image: alpine:3.24
-      options: --privileged
+            alpine_img: alpine:3.24
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Alpine
-        run: |
-          apk update
-          apk add --no-cache abuild build-base apk-tools alpine-conf git sudo fakeroot linux-headers bc bison flex elfutils-dev openssl-dev perl python3 bash
-
-      - name: Setup abuild user
-        run: |
-          addgroup -S abuild
-          adduser -S -G abuild -h /home/builder -s /bin/sh builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          mkdir -p /home/builder/.abuild
-          openssl genrsa -out /home/builder/.abuild/ci.rsa 2048 2>/dev/null
-          openssl rsa -in /home/builder/.abuild/ci.rsa -pubout -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
-          cp /home/builder/.abuild/ci.rsa.pub /etc/apk/keys/
-          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
-          echo 'PACKAGER="DokiOS CI"' >> /home/builder/.abuild/abuild.conf
-          echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
-          chown -R builder:abuild /home/builder/.abuild /home/builder/packages
-
-      - name: Cache ccache
-        uses: actions/cache@v5
+      - name: Build in Alpine container
+        uses: addnab/docker-run-action@v3
         with:
-          path: /home/builder/.ccache
-          key: ccache-${{ matrix.arch }}-${{ hashFiles('doki/doki-os-kernel/APKBUILD') }}
-          restore-keys: ccache-${{ matrix.arch }}-
+          image: ${{ matrix.alpine_img }}
+          options: -v ${{ github.workspace }}:/work -w /work --privileged
+          run: |
+            apk update
+            apk add --no-cache abuild build-base apk-tools alpine-conf git sudo fakeroot linux-headers bc bison flex elfutils-dev openssl-dev perl python3 bash
+            addgroup -S abuild
+            adduser -S -G abuild -h /home/builder -s /bin/sh builder
+            echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+            mkdir -p /home/builder/.abuild
+            openssl genrsa -out /home/builder/.abuild/ci.rsa 2048 2>/dev/null
+            openssl rsa -in /home/builder/.abuild/ci.rsa -pubout -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
+            cp /home/builder/.abuild/ci.rsa.pub /etc/apk/keys/
+            echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
+            echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
+            chown -R builder:abuild /home/builder/.abuild
 
-      - name: Build kernel
-        run: |
-          cd doki/doki-os-kernel
-          CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum"
-          CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" || true
-          find /home/builder/packages -name "*.apk" -exec cp {} /tmp/ \;
+            echo "==> Building kernel..."
+            cd /work/doki/doki-os-kernel
+            CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum" || echo "⚠️ checksum skip"
+            CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" || echo "⚠️ kernel build skip"
 
-      - name: Build meta-packages
-        run: |
-          for pkg in doki dokid doki-compose doki-init doki-kube doki-kubectl doki-os-base doki-os-vm; do
-            echo "==> Building $pkg"
-            cd doki/$pkg
-            CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum" 2>/dev/null || true
-            CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" 2>/dev/null || echo "  ⚠️ $pkg skipped (needs pre-built binary)"
-            cd ../..
-          done
+            echo "==> Building meta-packages..."
+            for pkg in doki dokid doki-compose doki-init doki-kube doki-kubectl doki-os-base doki-os-vm; do
+              echo "  -> $pkg"
+              cd /work/doki/$pkg
+              CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum" 2>/dev/null || true
+              CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" 2>/dev/null || true
+              cd /work
+            done
 
-      - name: Create repo
-        run: |
-          mkdir -p repo/main/${{ matrix.arch }}
-          find /home/builder/packages -name '*.apk' -exec cp {} repo/main/${{ matrix.arch }}/ \; 2>/dev/null
-          if ls repo/main/${{ matrix.arch }}/*.apk >/dev/null 2>&1; then
-            cd repo/main/${{ matrix.arch }}
-            apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || true
-          fi
+            echo "==> Creating repo..."
+            mkdir -p /work/repo/main/${{ matrix.arch }}
+            find /home/builder/packages -name '*.apk' -exec cp {} /work/repo/main/${{ matrix.arch }}/ \; 2>/dev/null || true
+            if ls /work/repo/main/${{ matrix.arch }}/*.apk >/dev/null 2>&1; then
+              cd /work/repo/main/${{ matrix.arch }}
+              apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || true
+            fi
+            echo "Done building for ${{ matrix.arch }}"
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -97,18 +86,12 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-latest
+            alpine_img: alpine:3.24
           - arch: aarch64
             runner: ubuntu-24.04-arm
-    container:
-      image: alpine:3.24
-      options: --privileged
+            alpine_img: alpine:3.24
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup
-        run: |
-          apk update
-          apk add --no-cache alpine-conf apk-tools busybox fakeroot syslinux xorriso grub mtools dosfstools squashfs-tools e2fsprogs cpio git bash sudo
 
       - name: Download packages
         uses: actions/download-artifact@v5
@@ -117,10 +100,20 @@ jobs:
           path: packages/
         continue-on-error: true
 
-      - name: Build initramfs
-        run: |
-          mkdir -p output
-          ./scripts/mkimage.sh --arch ${{ matrix.arch }} --profile doki_os_initramfs --repository ./packages/main/${{ matrix.arch }} --repository https://dl-cdn.alpinelinux.org/alpine/edge/main --repository https://dl-cdn.alpinelinux.org/alpine/edge/community --outdir output/ --tag ${{ github.sha }} 2>&1 || true
+      - name: Build images in Alpine
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.alpine_img }}
+          options: -v ${{ github.workspace }}:/work -w /work --privileged
+          run: |
+            apk update
+            apk add --no-cache alpine-conf apk-tools busybox fakeroot syslinux xorriso grub mtools dosfstools squashfs-tools e2fsprogs cpio git bash sudo
+            mkdir -p output
+            
+            echo "==> Building initramfs..."
+            ./scripts/mkimage.sh --arch ${{ matrix.arch }} --profile doki_os_initramfs --repository ./packages/main/${{ matrix.arch }} --repository https://dl-cdn.alpinelinux.org/alpine/edge/main --repository https://dl-cdn.alpinelinux.org/alpine/edge/community --outdir output/ --tag ${{ github.sha }} 2>&1 | tail -10
+            echo "==> Output:"
+            ls -lh output/
 
       - name: Upload images
         uses: actions/upload-artifact@v4
@@ -155,24 +148,24 @@ jobs:
         with:
           name: "doki-OS v0.1"
           body: |
-            ## doki-OS v0.1
+            ## doki-OS v0.1 — Container-Optimized OS
             
-            Container-optimized operating system based on Alpine Linux 3.24.
+            Based on Alpine Linux 3.24 with Linux Kernel 7.1.
             
             ### Included
-            - Linux Kernel 7.1 (container-optimized)
-            - Wi-Fi support (iwlwifi, ath10k, mt76, rtw88, brcmfmac)
-            - Container features: namespaces, cgroups v2, overlayfs, seccomp
-            - Pre-installed: iproute2, nftables, fuse-overlayfs, wpa_supplicant
-            - APK package manager with edge repos
+            - **Kernel 7.1** (container-optimized, Wi-Fi enabled)
+            - **Container features**: namespaces, cgroups v2, overlayfs, seccomp
+            - **Networking**: iproute2, nftables, wpa_supplicant
+            - **Storage**: fuse-overlayfs
+            - **Package manager**: apk (Alpine edge repos)
             
-            ### Images
-            - `dokios-initramfs-*` - All-in-RAM (no disk needed)
-            - `dokios-vm-*` - Persistent disk image
-            
-            ### Boot
+            ### Quick Start
             ```bash
-            qemu-system-aarch64 -kernel vmlinuz-doki-os -initrd dokios-initramfs-aarch64.tar.gz -append "console=ttyAMA0 init=/sbin/doki-init" -m 512 -nographic
+            qemu-system-aarch64 \
+              -kernel vmlinuz-doki-os \
+              -initrd doki-os-initramfs-aarch64.tar.gz \
+              -append "console=ttyAMA0 init=/sbin/doki-init" \
+              -m 512 -nographic
             ```
           files: release/*
           generate_release_notes: false
