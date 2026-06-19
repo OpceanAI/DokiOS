@@ -19,7 +19,9 @@ jobs:
       matrix:
         include:
           - arch: x86_64
+            karch: x86_64
           - arch: aarch64
+            karch: arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -36,32 +38,33 @@ jobs:
       - name: Compile kernel
         shell: alpine.sh {0}
         run: |
-          set -e
           KVER="7.1.0"
           MAJ="${KVER%%.*}"
-          echo "=== Downloading kernel $KVER ==="
-          wget -q https://cdn.kernel.org/pub/linux/kernel/v${MAJ}.x/linux-${KVER%.*}.tar.xz
-          tar xf linux-${KVER%.*}.tar.xz
-          cd linux-${KVER%.*}
+          SRC="linux-${KVER%.*}"
+          
+          echo "=== Downloading kernel.org/linux-${KVER%.*}.tar.xz ==="
+          wget -nv "https://cdn.kernel.org/pub/linux/kernel/v${MAJ}.x/${SRC}.tar.xz"
+          echo "=== Extracting ==="
+          tar xf "${SRC}.tar.xz"
+          cd "$SRC"
           
           echo "=== Configuring ==="
-          cp $GITHUB_WORKSPACE/doki/doki-os-kernel/doki-os.${{ matrix.arch }}.config .config
-          case "${{ matrix.arch }}" in
-            x86_64)  KARCH="x86_64" ;;
-            aarch64) KARCH="arm64"  ;;
-            *)       KARCH="${{ matrix.arch }}" ;;
-          esac
-          make ARCH=$KARCH olddefconfig
+          cp "$GITHUB_WORKSPACE/doki/doki-os-kernel/doki-os.${{ matrix.arch }}.config" .config
+          make ARCH=${{ matrix.karch }} olddefconfig
           
-          echo "=== Building ==="
-          make ARCH=$KARCH -j$(nproc) 2>&1 | tail -20
+          echo "=== Building kernel ($(nproc) jobs) ==="
+          make ARCH=${{ matrix.karch }} \
+            CC="gcc" \
+            AWK="mawk" \
+            -j$(nproc) 2>&1 | tail -30
           
-          echo "=== Result ==="
-          find arch/$KARCH/boot -type f \( -name "Image*" -o -name "bzImage" -o -name "zImage" -o -name "vmlinux" \) -ls
+          echo "=== Collecting artifacts ==="
           mkdir -p output
-          cp arch/$KARCH/boot/Image* arch/$KARCH/boot/bzImage arch/$KARCH/boot/zImage arch/$KARCH/boot/vmlinux output/ 2>/dev/null || true
-          cp System.map output/ 2>/dev/null || true
-          cp .config output/config 2>/dev/null || true
+          for f in arch/${{ matrix.karch }}/boot/Image.gz arch/${{ matrix.karch }}/boot/bzImage arch/${{ matrix.karch }}/boot/zImage arch/${{ matrix.karch }}/boot/vmlinux; do
+            [ -f "$f" ] && cp "$f" output/ && echo "  ✓ $f"
+          done
+          [ -f System.map ] && cp System.map output/ && echo "  ✓ System.map"
+          [ -f .config ] && cp .config output/config
           ls -lh output/
 
       - name: Upload kernel
@@ -93,7 +96,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           mkdir -p output
-          $GITHUB_WORKSPACE/scripts/genrootfs.sh \
+          "$GITHUB_WORKSPACE/scripts/genrootfs.sh" \
             -a ${{ matrix.arch }} \
             -o output/dokios-minirootfs-${{ matrix.arch }}.tar.gz \
             busybox alpine-baselayout alpine-keys alpine-release apk-tools musl-utils \
@@ -132,19 +135,6 @@ jobs:
           name: "doki-OS v0.1"
           body: |
             ## doki-OS v0.1 — Container-Optimized OS
-            
             Based on Alpine Linux 3.24 with Linux Kernel 7.1.
-            
-            ### Included
-            - **Kernel 7.1** compiled with `make` on Alpine edge
-            - Container features: namespaces, cgroups v2, overlayfs, seccomp, Landlock
-            - Wi-Fi: iwlwifi, ath10k, mt76, rtw88, brcmfmac (modules)
-            - Alpine rootfs with iproute2, nftables, fuse-overlayfs, wpa_supplicant
-            
-            ### Quick Start
-            ```bash
-            tar xzf dokios-minirootfs-x86_64.tar.gz -C rootfs/
-            chroot rootfs /bin/ash
-            ```
           files: release/*
           prerelease: false
