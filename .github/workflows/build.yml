@@ -26,7 +26,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     container:
-      image: alpine:${{ env.ALPINE_VERSION }}
+      image: alpine:3.24
       options: --privileged
     steps:
       - name: Install deps
@@ -101,7 +101,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     container:
-      image: alpine:${{ env.ALPINE_VERSION }}
+      image: alpine:3.24
       options: --privileged
     steps:
       - name: Install deps
