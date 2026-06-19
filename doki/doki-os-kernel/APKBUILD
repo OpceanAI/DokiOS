@@ -1,5 +1,5 @@
 pkgname=doki-os-kernel
-pkgver=7.0.12
+pkgver=7.1.0
 _kernver=${pkgver%.*}
 _flavor=doki-os
 pkgrel=0

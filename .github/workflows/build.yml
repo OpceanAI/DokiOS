@@ -1,15 +1,13 @@
-name: Build Dokios
+name: Build Dokios Complete
 
 on:
   push:
     branches: [main, doki-os]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags: ['dokios-v*']
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: dokios-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -17,7 +15,7 @@ env:
 
 jobs:
   build-packages:
-    name: Build APK Packages (${{ matrix.arch }})
+    name: Build APKs (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -31,14 +29,11 @@ jobs:
       image: alpine:${{ env.ALPINE_VERSION }}
       options: --privileged
     steps:
-      - name: Install build dependencies
+      - name: Install deps
         run: |
-          apk add --no-cache \
-            abuild build-base apk-tools alpine-conf git sudo fakeroot \
-            linux-headers bc bison flex elfutils-dev openssl-dev perl \
-            python3 bash
+          apk add --no-cache abuild build-base apk-tools alpine-conf git sudo fakeroot linux-headers bc bison flex elfutils-dev openssl-dev perl python3 bash
 
-      - name: Setup builder user
+      - name: Setup builder
         run: |
           addgroup -S abuild
           adduser -S -G abuild -h /home/builder -s /bin/sh builder
@@ -46,30 +41,16 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Restore signing key
-        if: github.event_name != 'pull_request'
-        env:
-          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
-        run: |
-          mkdir -p /home/builder/.abuild
-          echo "$APK_SIGNING_KEY" | base64 -d > /home/builder/.abuild/ci.rsa
-          chmod 0600 /home/builder/.abuild/ci.rsa
-          chown builder:abuild /home/builder/.abuild/ci.rsa
-          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
-          echo 'PACKAGER="DokiOS CI <ci@doki.opceanai.com>"' >> /home/builder/.abuild/abuild.conf
-          echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
-          chown builder:abuild /home/builder/.abuild/abuild.conf
-
-      - name: Generate temporary key (PR builds)
-        if: github.event_name == 'pull_request'
+      - name: Setup signing key
         run: |
           mkdir -p /home/builder/.abuild
           openssl genrsa -out /home/builder/.abuild/ci.rsa 2048 2>/dev/null
-          openssl rsa -in /home/builder/.abuild/ci.rsa -pubout \
-            -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
-          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
-          chown -R builder:abuild /home/builder/.abuild
+          openssl rsa -in /home/builder/.abuild/ci.rsa -pubout -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
           cp /home/builder/.abuild/ci.rsa.pub /etc/apk/keys/
+          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
+          echo 'PACKAGER="DokiOS CI"' >> /home/builder/.abuild/abuild.conf
+          echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
+          chown -R builder:abuild /home/builder/.abuild
 
       - name: Cache ccache
         uses: actions/cache@v5
@@ -78,7 +59,7 @@ jobs:
           key: ccache-${{ matrix.arch }}-${{ hashFiles('doki/**/APKBUILD') }}
           restore-keys: ccache-${{ matrix.arch }}-
 
-      - name: Build kernel package
+      - name: Build kernel
         run: |
           cd doki/doki-os-kernel
           su builder -c "abuild -F checksum"
@@ -87,22 +68,18 @@ jobs:
       - name: Build Doki packages
         run: |
           for pkg in doki dokid doki-compose doki-init doki-kube doki-kubectl doki-os-base doki-os-vm; do
-            echo "==> Building $pkg"
+            echo "==> $pkg"
             cd doki/$pkg
             su builder -c "abuild -F -r" || exit 1
             cd ../..
           done
 
-      - name: Create APK repository
+      - name: Create APK repo
         run: |
-          REPO_DIR="repo/main/${{ matrix.arch }}"
-          mkdir -p "$REPO_DIR"
-          find /home/builder/packages -name '*.apk' -exec cp {} "$REPO_DIR/" \;
-          cd "$REPO_DIR"
+          mkdir -p repo/main/${{ matrix.arch }}
+          find /home/builder/packages -name '*.apk' -exec cp {} repo/main/${{ matrix.arch }}/ \;
+          cd repo/main/${{ matrix.arch }}
           apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || true
-          if [ -f /home/builder/.abuild/ci.rsa ]; then
-            abuild-sign -k /home/builder/.abuild/ci.rsa APKINDEX.tar.gz
-          fi
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -110,3 +87,76 @@ jobs:
           name: packages-${{ matrix.arch }}
           path: repo/
           retention-days: 14
+
+  build-images:
+    name: Build Images (${{ matrix.arch }})
+    needs: build-packages
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    container:
+      image: alpine:${{ env.ALPINE_VERSION }}
+      options: --privileged
+    steps:
+      - name: Install deps
+        run: |
+          apk add --no-cache alpine-conf apk-tools busybox fakeroot syslinux xorriso grub mtools dosfstools squashfs-tools e2fsprogs cpio git bash sudo
+
+      - uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v5
+        with:
+          name: packages-${{ matrix.arch }}
+          path: packages/
+        continue-on-error: true
+
+      - name: Build initramfs
+        run: |
+          mkdir -p output
+          ./scripts/mkimage.sh --arch ${{ matrix.arch }} --profile doki_os_initramfs --repository ./packages/main/${{ matrix.arch }} --repository https://dl-cdn.alpinelinux.org/alpine/edge/main --repository https://dl-cdn.alpinelinux.org/alpine/edge/community --outdir output/ --tag ${{ github.sha }}
+
+      - name: Build VM image
+        run: |
+          ./scripts/mkimage.sh --arch ${{ matrix.arch }} --profile doki_os_vm --repository ./packages/main/${{ matrix.arch }} --repository https://dl-cdn.alpinelinux.org/alpine/edge/main --repository https://dl-cdn.alpinelinux.org/alpine/edge/community --outdir output/ --tag ${{ github.sha }}
+
+      - name: Upload images
+        uses: actions/upload-artifact@v4
+        with:
+          name: dokios-images-${{ matrix.arch }}
+          path: output/
+          retention-days: 30
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/dokios-v')
+    needs: build-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all
+        uses: actions/download-artifact@v5
+        with:
+          path: release/
+          pattern: dokios-images-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt 2>/dev/null || true
+          sha512sum * > SHA512SUMS.txt 2>/dev/null || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          generate_release_notes: true
+          prerelease: false

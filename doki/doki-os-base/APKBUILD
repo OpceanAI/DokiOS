@@ -26,5 +26,3 @@ package() {
 	mkdir -p "$pkgdir"
 }
 
-sha512sums="
-"

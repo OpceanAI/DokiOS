@@ -50,12 +50,15 @@ sed -i -e 's/^root::/root:*:/' "$tmp"/etc/shadow
 chgrp 42 "$tmp"/etc/shadow
 
 branch=edge
-VERSION_ID=$(awk -F= '$1=="VERSION_ID" {print $2}'  "$tmp"/etc/os-release)
-case $VERSION_ID in
-*_alpha*|*_beta*) branch=edge;;
-*.*.*) branch=v${VERSION_ID%.*};;
-esac
+if [ -f "$tmp"/etc/os-release ]; then
+	VERSION_ID=$(awk -F= '$1=="VERSION_ID" {print $2}'  "$tmp"/etc/os-release)
+	case $VERSION_ID in
+	*_alpha*|*_beta*) branch=edge;;
+	*.*.*) branch=v${VERSION_ID%.*};;
+	esac
+fi
 
+echo "Writing repositories for branch: $branch"
 cat > "$tmp"/etc/apk/repositories <<EOF
 https://dl-cdn.alpinelinux.org/alpine/$branch/main
 https://dl-cdn.alpinelinux.org/alpine/$branch/community
