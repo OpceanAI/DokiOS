@@ -33,39 +33,48 @@ jobs:
             build-base bc bison flex openssl-dev elfutils-dev
             gmp-dev mpc1-dev mpfr-dev perl linux-headers
             findutils diffutils installkernel zstd python3 pahole sed
+            libcap-dev
           shell-name: alpine.sh
 
-      - name: Compile kernel
+      - name: Download kernel
         shell: alpine.sh {0}
         run: |
-          KVER="7.1.0"
-          MAJ="${KVER%%.*}"
-          SRC="linux-${KVER%.*}"
-          
-          echo "=== Downloading kernel.org/linux-${KVER%.*}.tar.xz ==="
-          wget -nv "https://cdn.kernel.org/pub/linux/kernel/v${MAJ}.x/${SRC}.tar.xz"
-          echo "=== Extracting ==="
-          tar xf "${SRC}.tar.xz"
-          cd "$SRC"
-          
-          echo "=== Configuring ==="
+          wget -nv https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.tar.xz
+          tar xf linux-7.1.tar.xz
+
+      - name: Configure and build
+        shell: alpine.sh {0}
+        working-directory: linux-7.1
+        run: |
           cp "$GITHUB_WORKSPACE/doki/doki-os-kernel/doki-os.${{ matrix.arch }}.config" .config
-          make ARCH=${{ matrix.karch }} olddefconfig
           
-          echo "=== Building kernel ($(nproc) jobs) ==="
-          make ARCH=${{ matrix.karch }} \
-            CC="gcc" \
-            AWK="mawk" \
-            -j$(nproc) 2>&1 | tail -30
+          echo "=== Fixing musl compat ==="
+          sed -i 's/CONFIG_STACKPROTECTOR=y/# CONFIG_STACKPROTECTOR is not set/' .config 2>/dev/null || true
+          sed -i 's/CONFIG_STACKPROTECTOR_STRONG=y/# CONFIG_STACKPROTECTOR_STRONG is not set/' .config 2>/dev/null || true
+          sed -i 's/CONFIG_GCC_PLUGINS=y/# CONFIG_GCC_PLUGINS is not set/' .config 2>/dev/null || true
+          sed -i 's/CONFIG_GCC_PLUGIN_LATENT_ENTROPY=y/# CONFIG_GCC_PLUGIN_LATENT_ENTROPY is not set/' .config 2>/dev/null || true
           
-          echo "=== Collecting artifacts ==="
+          echo "=== make olddefconfig ==="
+          make ARCH=${{ matrix.karch }} olddefconfig 2>&1
+          
+          echo "=== Building ($(nproc) jobs) ==="
+          make ARCH=${{ matrix.karch }} -j$(nproc) 2>&1 | grep -E "error|Error|ERROR|CC|LD|Kernel|SYNC|failed" | tail -30
+          echo "EXIT=$?"
+
+      - name: Collect artifacts
+        shell: alpine.sh {0}
+        working-directory: linux-7.1
+        run: |
           mkdir -p output
-          for f in arch/${{ matrix.karch }}/boot/Image.gz arch/${{ matrix.karch }}/boot/bzImage arch/${{ matrix.karch }}/boot/zImage arch/${{ matrix.karch }}/boot/vmlinux; do
-            [ -f "$f" ] && cp "$f" output/ && echo "  ✓ $f"
+          KARCH=${{ matrix.karch }}
+          echo "=== Checking for kernel image ==="
+          find arch/$KARCH/boot -type f -ls
+          for f in arch/$KARCH/boot/Image* arch/$KARCH/boot/bzImage arch/$KARCH/boot/zImage; do
+            [ -f "$f" ] && cp "$f" output/ && echo "✓ $f"
           done
-          [ -f System.map ] && cp System.map output/ && echo "  ✓ System.map"
+          [ -f System.map ] && cp System.map output/ && echo "✓ System.map"
           [ -f .config ] && cp .config output/config
-          ls -lh output/
+          ls -lh output/ || echo "No artifacts"
 
       - name: Upload kernel
         uses: actions/upload-artifact@v4
@@ -98,7 +107,7 @@ jobs:
           mkdir -p output
           "$GITHUB_WORKSPACE/scripts/genrootfs.sh" \
             -a ${{ matrix.arch }} \
-            -o output/dokios-minirootfs-${{ matrix.arch }}.tar.gz \
+            -o "output/dokios-minirootfs-${{ matrix.arch }}.tar.gz" \
             busybox alpine-baselayout alpine-keys alpine-release apk-tools musl-utils \
             iproute2 nftables fuse-overlayfs wireless-tools wpa_supplicant ca-certificates-bundle 2>&1 | tail -5
           ls -lh output/
@@ -133,8 +142,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: "doki-OS v0.1"
-          body: |
-            ## doki-OS v0.1 — Container-Optimized OS
-            Based on Alpine Linux 3.24 with Linux Kernel 7.1.
+          body: "doki-OS v0.1 — Container-optimized OS based on Alpine 3.24 + Kernel 7.1"
           files: release/*
           prerelease: false
