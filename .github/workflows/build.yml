@@ -11,129 +11,133 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-release:
-    name: Build doki-OS v0.1
-    runs-on: ${{ matrix.runner }}
+  build-kernel:
+    name: Build Kernel (${{ matrix.arch }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-latest
           - arch: aarch64
-            runner: ubuntu-24.04-arm
+    container:
+      image: alpine:edge
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build everything in Alpine
-        uses: addnab/docker-run-action@v3
+      - name: Install build deps
+        run: |
+          apk update
+          apk add --no-cache alpine-sdk build-base bc bison flex openssl-dev elfutils-dev gmp-dev mpc1-dev mpfr-dev perl linux-headers findutils diffutils installkernel zstd python3 bash sudo pahole
+
+      - name: Setup abuild
+        run: |
+          addgroup root abuild
+          mkdir -p /root/.abuild
+          openssl genrsa -out /root/.abuild/ci.rsa 2048 2>/dev/null
+          openssl rsa -in /root/.abuild/ci.rsa -pubout -out /root/.abuild/ci.rsa.pub 2>/dev/null
+          cp /root/.abuild/ci.rsa.pub /etc/apk/keys/
+          echo 'PACKAGER_PRIVKEY="/root/.abuild/ci.rsa"' > /root/.abuild/abuild.conf
+          echo 'PACKAGER="DokiOS CI"' >> /root/.abuild/abuild.conf
+          echo 'REPODEST="/root/packages"' >> /root/.abuild/abuild.conf
+
+      - name: Build kernel
+        working-directory: doki/doki-os-kernel
+        run: |
+          CARCH=${{ matrix.arch }} abuild -F checksum
+          CARCH=${{ matrix.arch }} abuild -F -r
+          echo "=== Built kernel packages ==="
+          find /root/packages -name "*.apk" -exec ls -lh {} \;
+
+      - name: Upload kernel
+        uses: actions/upload-artifact@v4
         with:
-          image: alpine:3.24
-          options: -v ${{ github.workspace }}:/work -w /work --privileged
-          run: |
-            set -e
-            apk update
-            apk add --no-cache abuild build-base apk-tools alpine-conf git sudo fakeroot linux-headers bc bison flex elfutils-dev openssl-dev perl python3 bash
-            apk add --no-cache syslinux xorriso grub mtools dosfstools squashfs-tools e2fsprogs cpio || true
+          name: kernel-${{ matrix.arch }}
+          path: /root/packages/
+          retention-days: 30
 
-            addgroup -S abuild
-            adduser -S -G abuild -h /home/builder -s /bin/sh builder
-            echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-            mkdir -p /home/builder/.abuild /home/builder/packages
-            openssl genrsa -out /home/builder/.abuild/ci.rsa 2048 2>/dev/null
-            openssl rsa -in /home/builder/.abuild/ci.rsa -pubout -out /home/builder/.abuild/ci.rsa.pub 2>/dev/null
-            cp /home/builder/.abuild/ci.rsa.pub /etc/apk/keys/
-            echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/ci.rsa"' > /home/builder/.abuild/abuild.conf
-            echo 'REPODEST="/home/builder/packages"' >> /home/builder/.abuild/abuild.conf
-            chown -R builder:abuild /home/builder/.abuild /home/builder/packages
+  build-rootfs:
+    name: Build Rootfs (${{ matrix.arch }})
+    needs: build-kernel
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+          - arch: aarch64
+    container:
+      image: alpine:edge
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
 
-            # Build kernel
-            echo "==> Building kernel..."
-            cd /work/doki/doki-os-kernel
-            CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum" || true
-            CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" || true
-            cd /work
+      - name: Install tools
+        run: apk update && apk add --no-cache bash
 
-            # Build packages
-            echo "==> Building packages..."
-            for pkg in doki dokid doki-compose doki-init doki-kube doki-kubectl doki-os-base doki-os-vm; do
-              echo "  -> $pkg"
-              cd /work/doki/$pkg
-              CARCH=${{ matrix.arch }} su builder -c "abuild -F checksum" 2>/dev/null || true
-              CARCH=${{ matrix.arch }} su builder -c "abuild -F -r -d" 2>/dev/null || true
-              cd /work
-            done
+      - name: Download kernel packages
+        uses: actions/download-artifact@v5
+        with:
+          name: kernel-${{ matrix.arch }}
+          path: kernel-pkgs/
 
-            # Create repo
-            echo "==> Creating APK repo..."
-            mkdir -p /work/repo/main/${{ matrix.arch }}
-            find /home/builder/packages -name '*.apk' -exec cp {} /work/repo/main/${{ matrix.arch }}/ \; 2>/dev/null || true
-            if ls /work/repo/main/${{ matrix.arch }}/*.apk >/dev/null 2>&1; then
-              cd /work/repo/main/${{ matrix.arch }}
-              apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || true
-            fi
+      - name: Build rootfs
+        run: |
+          mkdir -p output
+          cp scripts/genrootfs.sh /tmp/
+          /tmp/genrootfs.sh \
+            -a ${{ matrix.arch }} \
+            -o output/dokios-minirootfs-${{ matrix.arch }}.tar.gz \
+            busybox alpine-baselayout alpine-keys alpine-release apk-tools musl-utils \
+            iproute2 nftables fuse-overlayfs wireless-tools wpa_supplicant ca-certificates-bundle 2>&1 | tail -5
+          ls -lh output/
 
-            # Build images
-            echo "==> Building initramfs image..."
-            mkdir -p /work/output
-            ./scripts/mkimage.sh --arch ${{ matrix.arch }} --profile doki_os_initramfs --repository ./repo/main/${{ matrix.arch }} --repository https://dl-cdn.alpinelinux.org/alpine/edge/main --repository https://dl-cdn.alpinelinux.org/alpine/edge/community --outdir output/ --tag ${{ github.sha }} 2>&1 | tail -20 || true
-            echo "==> Output:"
-            ls -lh /work/output/
-            echo "BUILD_COMPLETE"
-
-      - name: Upload images
+      - name: Upload rootfs
         uses: actions/upload-artifact@v4
         with:
           name: dokios-${{ matrix.arch }}
           path: output/
           retention-days: 30
 
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-${{ matrix.arch }}
-          path: repo/
-          retention-days: 30
-
   release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/dokios-v')
-    needs: build-and-release
+    needs: build-rootfs
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download all artifacts
+      - name: Download all
         uses: actions/download-artifact@v5
         with:
           path: release/
           pattern: dokios-*
           merge-multiple: true
 
-      - name: Generate checksums
+      - name: Checksums
         run: |
           cd release
           sha256sum * > SHA256SUMS.txt 2>/dev/null || true
-          sha512sum * > SHA512SUMS.txt 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
           name: "doki-OS v0.1"
           body: |
-            ## doki-OS v0.1
+            ## doki-OS v0.1 — Container-Optimized OS
             
-            Container-optimized OS based on Alpine 3.24 + Kernel 7.1.
+            Based on Alpine Linux 3.24 with Linux Kernel 7.1.
             
-            ### Features
-            - Kernel 7.1 with Wi-Fi, namespaces, cgroups v2, overlayfs, seccomp
-            - iproute2, nftables, fuse-overlayfs, wpa_supplicant
+            ### Included
+            - Kernel 7.1 (container-optimized, Wi-Fi, namespaces, cgroups v2, overlayfs, seccomp)
+            - Alpine 3.24 base with iproute2, nftables, fuse-overlayfs, wpa_supplicant
             - APK package manager with edge repos
             
             ### Quick Start
             ```bash
-            qemu-system-aarch64 -kernel vmlinuz-doki-os -initrd doki-os-initramfs-aarch64.tar.gz -append "console=ttyAMA0 init=/sbin/doki-init" -m 512 -nographic
+            tar xzf dokios-minirootfs-aarch64.tar.gz -C rootfs/
+            chroot rootfs /bin/ash
             ```
           files: release/*
-          generate_release_notes: false
           prerelease: false
