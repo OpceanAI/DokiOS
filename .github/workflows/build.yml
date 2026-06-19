@@ -19,42 +19,45 @@ jobs:
       matrix:
         include:
           - arch: x86_64
+            apk_arch: x86_64
           - arch: aarch64
-    container:
-      image: alpine:edge
-      options: --privileged
+            apk_arch: aarch64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build deps
-        run: |
-          apk update
-          apk add --no-cache alpine-sdk build-base bc bison flex openssl-dev elfutils-dev gmp-dev mpc1-dev mpfr-dev perl linux-headers findutils diffutils installkernel zstd python3 bash sudo pahole
+      - name: Setup Alpine for ${{ matrix.apk_arch }}
+        uses: jirutka/setup-alpine@v1
+        with:
+          arch: ${{ matrix.apk_arch }}
+          branch: edge
+          packages: >
+            alpine-sdk build-base bc bison flex
+            openssl-dev elfutils-dev gmp-dev mpc1-dev mpfr-dev
+            perl linux-headers findutils diffutils installkernel
+            zstd python3 pahole sed mawk grep tar xz
+          shell-name: alpine.sh
 
       - name: Setup abuild
+        shell: alpine.sh {0}
         run: |
-          addgroup root abuild
-          mkdir -p /root/.abuild
-          openssl genrsa -out /root/.abuild/ci.rsa 2048 2>/dev/null
-          openssl rsa -in /root/.abuild/ci.rsa -pubout -out /root/.abuild/ci.rsa.pub 2>/dev/null
-          cp /root/.abuild/ci.rsa.pub /etc/apk/keys/
-          echo 'PACKAGER_PRIVKEY="/root/.abuild/ci.rsa"' > /root/.abuild/abuild.conf
-          echo 'PACKAGER="DokiOS CI"' >> /root/.abuild/abuild.conf
-          echo 'REPODEST="/root/packages"' >> /root/.abuild/abuild.conf
+          adduser -D builder
+          addgroup builder abuild
+          su builder -c "abuild-keygen -a -n"
+          cp /home/builder/.abuild/*.rsa.pub /etc/apk/keys/
 
       - name: Build kernel
+        shell: alpine.sh {0}
         working-directory: doki/doki-os-kernel
         run: |
-          CARCH=${{ matrix.arch }} abuild -F checksum
-          CARCH=${{ matrix.arch }} abuild -F -r
-          echo "=== Built kernel packages ==="
-          find /root/packages -name "*.apk" -exec ls -lh {} \;
+          su builder -c "CARCH=${{ matrix.arch }} abuild -F checksum"
+          su builder -c "CARCH=${{ matrix.arch }} abuild -F -r -d"
+          find /home/builder/packages -name '*.apk' -ls
 
-      - name: Upload kernel
+      - name: Upload kernel packages
         uses: actions/upload-artifact@v4
         with:
           name: kernel-${{ matrix.arch }}
-          path: /root/packages/
+          path: /home/builder/packages/
           retention-days: 30
 
   build-rootfs:
@@ -66,26 +69,25 @@ jobs:
       matrix:
         include:
           - arch: x86_64
+            apk_arch: x86_64
           - arch: aarch64
-    container:
-      image: alpine:edge
-      options: --privileged
+            apk_arch: aarch64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: apk update && apk add --no-cache bash
-
-      - name: Download kernel packages
-        uses: actions/download-artifact@v5
+      - uses: jirutka/setup-alpine@v1
         with:
-          name: kernel-${{ matrix.arch }}
-          path: kernel-pkgs/
+          arch: ${{ matrix.apk_arch }}
+          branch: edge
+          packages: bash
+          shell-name: alpine.sh
 
       - name: Build rootfs
+        shell: alpine.sh {0}
         run: |
           mkdir -p output
-          cp scripts/genrootfs.sh /tmp/
+          cp scripts/genrootfs.sh /tmp/genrootfs.sh
+          chmod +x /tmp/genrootfs.sh
           /tmp/genrootfs.sh \
             -a ${{ matrix.arch }} \
             -o output/dokios-minirootfs-${{ matrix.arch }}.tar.gz \
@@ -130,13 +132,13 @@ jobs:
             Based on Alpine Linux 3.24 with Linux Kernel 7.1.
             
             ### Included
-            - Kernel 7.1 (container-optimized, Wi-Fi, namespaces, cgroups v2, overlayfs, seccomp)
+            - Kernel 7.1 (container-optimized: namespaces, cgroups v2, overlayfs, seccomp, Wi-Fi)
             - Alpine 3.24 base with iproute2, nftables, fuse-overlayfs, wpa_supplicant
             - APK package manager with edge repos
-            
+
             ### Quick Start
             ```bash
-            tar xzf dokios-minirootfs-aarch64.tar.gz -C rootfs/
+            tar xzf dokios-minirootfs-x86_64.tar.gz -C rootfs/
             chroot rootfs /bin/ash
             ```
           files: release/*

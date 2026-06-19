@@ -1,41 +1,77 @@
-pkgname=doki-os-kernel
+_flavor=${FLAVOR:-doki-os}
+pkgname=linux-$_flavor
 pkgver=7.1.0
 _kernver=${pkgver%.*}
-_flavor=doki-os
 pkgrel=0
 pkgdesc="doki-OS container-optimized kernel"
 url="https://www.kernel.org"
-arch="x86_64 aarch64 armv7"
+arch="all !armhf"
 license="GPL-2.0-only"
 depends="initramfs-generator"
-makedepends="perl gmp-dev mpc1-dev mpfr-dev elfutils-dev bash flex bison
-	zstd installkernel bc linux-headers linux-firmware-any openssl-dev>3
-	mawk diffutils findutils pahole python3 gcc>=13.1.1_git20230624 bpftool"
+_depends_dev="perl gmp-dev mpc1-dev mpfr-dev elfutils-dev bash flex bison zstd"
+makedepends="$_depends_dev sed installkernel bc linux-headers linux-firmware-any openssl-dev>3 mawk
+	diffutils elfutils findutils zstd pahole python3 gcc>=13.1.1_git20230624"
 options="!strip !check"
-source="https://cdn.kernel.org/pub/linux/kernel/v${_kernver%%.*}.x/linux-$_kernver.tar.xz
+source="https://cdn.kernel.org/pub/linux/kernel/v${pkgver%%.*}.x/linux-$_kernver.tar.xz
 	doki-os.x86_64.config
 	doki-os.aarch64.config
 	doki-os.armv7.config"
 
-export GOCACHE="${GOCACHE:-"$srcdir/go-cache"}"
+_archlist="x86_64 aarch64 armv7"
+
+_kernelarch() {
+	case "$1" in
+		aarch64*) echo "arm64" ;;
+		armv7)    echo "arm" ;;
+		x86_64)   echo "x86_64" ;;
+		*)        echo "$1" ;;
+	esac
+}
+
+_prepareconfig() {
+	local _flavor="$1"
+	local _arch="$2"
+	local _config=$_flavor.$_arch.config
+	local _builddir="$srcdir"/build-$_flavor.$_arch
+	mkdir -p "$_builddir"
+	echo "-$pkgrel-$_flavor" > "$_builddir"/localversion-alpine
+	cp "$srcdir"/$_config "$_builddir"/.config
+	make -C "$builddir" \
+		O="$_builddir" \
+		ARCH="$(_kernelarch $_arch)" \
+		olddefconfig
+}
 
 build() {
-	unset LDFLAGS
-	cd "$builddir"
-	cp "$srcdir"/doki-os.$CARCH.config .config
-	make olddefconfig
-	make -j$(nproc)
+	unset LDFLAGS CFLAGS CPPFLAGS CXXFLAGS
+	for _arch in $_archlist; do
+		_prepareconfig "$_flavor" "$_arch"
+	done
+	_prepareconfig "$_flavor" "$CARCH"
+	cd "$srcdir"/build-$_flavor.$CARCH
+	make ARCH="$(_kernelarch $CARCH)" \
+		CC="${CC:-gcc}" \
+		AWK="${AWK:-mawk}" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-doki-os" \
+		-j$(nproc)
 }
 
 package() {
-	install -Dm644 "$builddir"/arch/*/boot/Image.gz \
-		"$pkgdir"/boot/vmlinuz-$_flavor
-	install -Dm644 "$builddir"/System.map \
-		"$pkgdir"/boot/System.map-$_flavor
-	# Install kernel modules
-	make INSTALL_MOD_PATH="$pkgdir" modules_install
-	# Strip debug info from modules
+	local _builddir="$srcdir"/build-$_flavor.$CARCH
+	install -Dm644 "$_builddir"/arch/*/boot/Image.gz \
+		"$pkgdir"/boot/vmlinuz-$_flavor 2>/dev/null
+	install -Dm644 "$_builddir"/arch/x86/boot/bzImage \
+		"$pkgdir"/boot/vmlinuz-$_flavor 2>/dev/null
+	install -Dm644 "$_builddir"/arch/arm/boot/zImage \
+		"$pkgdir"/boot/vmlinuz-$_flavor 2>/dev/null
+	install -Dm644 "$_builddir"/System.map \
+		"$pkgdir"/boot/System.map-$_flavor 2>/dev/null
+	make -C "$_builddir" modules_install \
+		ARCH="$(_kernelarch $CARCH)" \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1
 	find "$pkgdir" -name '*.ko' -exec strip --strip-debug {} \; 2>/dev/null || true
+	rm -rf "$pkgdir"/lib/firmware
 }
 
 sha512sums="
