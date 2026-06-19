@@ -157,7 +157,7 @@ done
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --outdir output/ \
-    --tag 0.9.5
+    --tag 0.10.0
 
 # qcow2 (persistent disk)
 ./scripts/mkimage.sh \
@@ -167,7 +167,7 @@ done
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --outdir output/ \
-    --tag 0.9.5
+    --tag 0.10.0
 ```
 
 ## Download

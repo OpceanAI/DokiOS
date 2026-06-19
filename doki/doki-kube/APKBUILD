@@ -1,5 +1,5 @@
 pkgname=doki-kube
-pkgver=0.9.5
+pkgver=0.10.0
 pkgrel=0
 pkgdesc="Kubernetes components for Doki (apiserver, kubelet, scheduler, controllers, proxy, dns)"
 url="https://github.com/OpceanAI/Doki"

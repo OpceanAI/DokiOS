@@ -1,19 +1,16 @@
 {
 	"root": "/var/lib/doki",
 	"socket_path": "/var/run/doki.sock",
-	"podman_socket_path": "/var/run/podman.sock",
-	"cri_socket_path": "/var/run/doki-cri.sock",
 	"storage_driver": "overlay2",
 	"default_network": "bridge",
-	"default_runtime": "auto",
-	"rootless": false,
+	"debug": false,
 	"log_level": "info",
-	"log_format": "auto",
-	"dns": {
-		"listen": "127.0.0.11:53",
-		"upstream": [],
-		"cache": { "persistent": false }
-	},
-	"gc": { "interval": "1h", "max_age": "72h" },
-	"security": { "seccomp_profile": "default", "no_new_privileges": true }
+	"rootless": false,
+	"data_dir": "/var/lib/doki",
+	"exec_root": "/var/run/doki",
+	"dns": ["8.8.8.8", "1.1.1.1"],
+	"dns_search": [],
+	"dns_options": [],
+	"registry_mirrors": [],
+	"insecure_registries": []
 }

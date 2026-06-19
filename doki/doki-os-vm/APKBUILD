@@ -1,5 +1,5 @@
 pkgname=doki-os-vm
-pkgver=0.9.5
+pkgver=0.10.0
 pkgrel=0
 pkgdesc="doki-OS VM metapackage (kernel + base + WiFi firmware)"
 url="https://github.com/OpceanAI/DokiOS"

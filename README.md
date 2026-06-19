@@ -126,7 +126,7 @@ Creates a minimal initramfs with all components in RAM:
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --outdir output/ \
-    --tag 0.9.5
+    --tag 0.10.0
 ```
 
 Output:
@@ -145,7 +145,7 @@ Creates a disk image with persistent storage:
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --outdir output/ \
-    --tag 0.9.5
+    --tag 0.10.0
 ```
 
 Output:
@@ -163,7 +163,7 @@ Creates a minimal rootfs for running Dokios inside containers:
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --outdir output/ \
-    --tag 0.9.5
+    --tag 0.10.0
 ```
 
 Output:

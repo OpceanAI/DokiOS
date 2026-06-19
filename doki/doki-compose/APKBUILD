@@ -1,5 +1,5 @@
 pkgname=doki-compose
-pkgver=0.9.5
+pkgver=0.10.0
 pkgrel=0
 pkgdesc="Docker Compose compatible engine for Doki"
 url="https://github.com/OpceanAI/Doki"
