@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/banner.svg" alt="DokiOS Banner" width="680">
-</p>
 
 <p align="center">
   <a href="https://kernel.org"><img src="https://img.shields.io/badge/Kernel-7.1.0-FCC624?style=flat&logo=linux&logoColor=black" alt="Kernel"></a>
@@ -21,9 +18,6 @@
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/wave.svg" alt="Wave Divider" width="600">
-</p>
 
 # The DokiOS Operating System
 
@@ -36,15 +30,9 @@
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/platforms.svg" alt="Platforms" width="600">
-</p>
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Overview
 
@@ -104,9 +92,6 @@ All three images have a unified layout: 200MB FAT32 boot partition + 400MB ext4 
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Features
 
@@ -155,9 +140,6 @@ All three images have a unified layout: 200MB FAT32 boot partition + 400MB ext4 
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/wave.svg" alt="Wave Divider" width="600">
-</p>
 
 ## Quick Start
 
@@ -341,9 +323,6 @@ a7cc6a38b50dd38daed6e232e488b4a3125d2ad8a1936983214db1aef4d885b0  doki-kube
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Architecture
 
@@ -440,9 +419,6 @@ cloudflared (upstream binary), doki, dokid, doki-compose, doki-init, doki-kube, 
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Customization
 
@@ -567,9 +543,6 @@ Changes are persistent in the ext4 root partition.
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Building
 
@@ -672,9 +645,6 @@ DokiOS/
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Known Limitations
 
@@ -706,9 +676,6 @@ DokiOS/
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/wave.svg" alt="Wave Divider" width="600">
-</p>
 
 ## What's New
 
@@ -755,9 +722,6 @@ For Raspberry Pi 3/4, use the `armv7` image with `dd` to SD card. For Raspberry 
 
 <br>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OpceanAI/DokiOS/main/.github/assets/divider.svg" alt="Divider" width="600">
-</p>
 
 ## Documentation
 
