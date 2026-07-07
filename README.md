@@ -21,6 +21,8 @@
 
 # The DokiOS Operating System
 
+![DokiOS Banner](dokios.gif)
+
 <p align="center">
   Alpine-based OS for running Doki v0.10.0 &middot; Linux kernel 7.1.0 &middot; Multi-arch<br>
   Bootable disk images for QEMU, VirtualBox, Raspberry Pi, and bare metal<br>
