@@ -745,10 +745,34 @@ Full documentation is in the [GitHub Wiki](https://github.com/OpceanAI/DokiOS/wi
 
 ## License
 
-- DokiOS scripts and configuration: Apache 2.0
-- Linux kernel: GPL v2
-- Alpine Linux packages: Various (MIT, GPL, etc.)
-- Doki binaries: Apache 2.0
+### DokiOS Components
+
+| Component | License | SPDX | Notes |
+|:----------|:--------|:-----|:------|
+| **DokiOS scripts and configuration** | Apache 2.0 | `Apache-2.0` | Build scripts, customization and packaging owned by DokiOS |
+| **Linux Kernel** | GPL v2 only + syscall exception | `GPL-2.0-only WITH Linux-syscall-note` | Linux 7.1.0 kernel. Licensed under GPL version 2 only, with the Linux syscall note exception for UAPI headers -- user-space programs under any license may invoke syscalls without legal contamination |
+| **BusyBox** | GPL v2 only | `GPL-2.0-only` | Swiss Army Knife of embedded Linux (300+ Unix commands in one binary). Current versions (post-1.2.2) are GPLv2 only, not "or later". Any derivative must be distributed under GPLv2 with no option to GPLv3. Enforcement handled by the Software Freedom Law Center (SFLC) |
+| **Alpine Linux (base)** | Multiple (GPL, MIT, BSD, etc.) | Various | Alpine is a meta-distribution of ~109+ individual packages, each with its own license. Core packages (musl, apk-tools, iproute2) use MIT/BSD/GPL-compatible licenses |
+| **Doki** | Apache 2.0 | `Apache-2.0` | Highly commercial and permissive license with explicit patent protection for the user |
+| **cloudflared** | Apache 2.0 | `Apache-2.0` | Cloudflare tunnel. Grants commercial freedoms with patent protection |
+| **fastfetch** | MIT | `MIT` | Extremely short, simple, and open license -- do almost anything you want with the code |
+| **OpenSSH** | BSD-style (OpenSSH License) | `SSH-OpenSSH` | BSD-style mixed license. Highly permissive, historically optimized for security and free redistribution |
+| **zsh** | MIT / BSD | `MIT` or `BSD-2-Clause` | Permissive MIT/BSD-style license, keeping the shell environment free of strict copyleft |
+| **bash** | GPL-3.0 | `GPL-3.0-only` | GNU GPLv3. The most legally restrictive tool in the set: any derivative must share its source code, with strong anti-tivoization clauses |
+
+### GPL License Details
+
+**GPL-2.0-only (BusyBox and Linux Kernel):**
+- Any distribution of binaries must be accompanied by the corresponding source code
+- The source code must be the specific version used to build the binary (pointing to a generic tarball is insufficient)
+- Section 3 provides three distribution methods: (A) include source with the binary, (B) written offer valid for 3 years, (C) for non-commercial distribution, redirect to upstream
+- Linux Kernel adds the Linux-syscall-note exception: UAPI headers may be used by user-space programs under any license
+- Kernel developers agreed on the "Linux Kernel Enforcement Statement": if it is your first violation and you cure it within 30 days, the license is reinstated permanently
+
+**GPL-3.0-only (bash):**
+- Same copyleft philosophy as GPLv2 but with additional anti-tivoization clauses (Section 11)
+- Requires that hardware running the software cannot prevent execution of modified versions
+- Incompatible with GPLv2 in certain aspects: GPLv2-only code cannot be combined with GPLv3-only code
 
 ## Links
 
